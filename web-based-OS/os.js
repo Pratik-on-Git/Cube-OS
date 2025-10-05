@@ -1981,15 +1981,43 @@ function getUniqueFolderName() {
 
 // Create a new folder icon on the desktop
 function createNewFolderOnDesktop() {
-  const left = '120px';
-  const top = '20px';
-  const name = getUniqueFolderName();
-  // Save to localStorage
+  const baseLeft = 120;
+  const baseTop = 20;
+  const spacing = 100; // Space between folders
   const folders = getSavedFolders();
-  folders.push({ name, left, top });
+  
+  // Find a free position
+  let left = baseLeft;
+  let top = baseTop;
+  let occupied = true;
+  const maxAttempts = 1000; // Prevent infinite loop
+  let attempts = 0;
+  
+  while (occupied && attempts < maxAttempts) {
+    attempts++;
+    occupied = folders.some(folder => {
+      const folderLeft = parseInt(folder.left);
+      const folderTop = parseInt(folder.top);
+      // Check if positions overlap (within spacing threshold)
+      return Math.abs(folderLeft - left) < spacing && Math.abs(folderTop - top) < spacing;
+    });
+    
+    if (occupied) {
+      // Try next position: move right, and if at edge, move down and reset left
+      left += spacing;
+      if (left > window.innerWidth - 150) { // Account for folder width
+        left = baseLeft;
+        top += spacing;
+      }
+    }
+  }
+  
+  const name = getUniqueFolderName();
+  // Save to localStorage with the found position
+  folders.push({ name, left: `${left}px`, top: `${top}px` });
   saveFolders(folders);
   // Render on desktop
-  renderFolder({ name, left, top });
+  renderFolder({ name, left: `${left}px`, top: `${top}px` });
 }
 
 // Helper to get all folders from localStorage
@@ -2224,19 +2252,6 @@ function renderFolder({ name, left, top }) {
   desktop.appendChild(folderIcon);
 }
 
-// Update createNewFolderOnDesktop to use attachFolderContextMenu
-function createNewFolderOnDesktop() {
-  const left = '120px';
-  const top = '20px';
-  const name = getUniqueFolderName();
-  // Save to localStorage
-  const folders = getSavedFolders();
-  folders.push({ name, left, top });
-  saveFolders(folders);
-  // Render on desktop
-  renderFolder({ name, left, top });
-}
-
 // Handle context menu actions
 contextMenu.addEventListener('click', (event) => {
   if (event.target.id === 'cm-refresh') {
@@ -2329,14 +2344,13 @@ function renderFolder({ name, left, top }) {
   folderIcon.style.left = left;
   folderIcon.style.top = top;
   folderIcon.draggable = true;
+  folderIcon.setAttribute('data-folder-name', name);
 
   // SVG folder icon
   const iconImage = document.createElement('div');
   iconImage.className = 'icon-image';
   iconImage.innerHTML = `
-    <svg width="48px" height="48px" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M0 1H6L9 4H16V14H0V1Z" fill="#ffffff"/>
-</svg>
+    <svg width="48px" height="48px" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 1H6L9 4H16V14H0V1Z" fill="#ffffff"/></svg>
   `;
   folderIcon.appendChild(iconImage);
 
@@ -2353,7 +2367,7 @@ function renderFolder({ name, left, top }) {
     // Deselect any previously selected folder
     document.querySelectorAll('.desktop-icon.selected').forEach(el => el.classList.remove('selected'));
     folderIcon.classList.add('selected');
-    selectedFolderName = name;
+    selectedFolderName = folderIcon.getAttribute('data-folder-name');
   });
 
   // Drag and drop logic
@@ -2391,6 +2405,7 @@ function renderFolder({ name, left, top }) {
     folderIcon.style.top = finalY + 'px';
     folderIcon.style.transform = 'none';
     // Save new position
+    const currentName = folderIcon.getAttribute('data-folder-name');
     const folders = getSavedFolders();
     const idx = folders.findIndex(f => f.name === name);
     if (idx !== -1) {
@@ -2422,7 +2437,6 @@ function renderFolder({ name, left, top }) {
 
   // Attach right-click context menu
   attachFolderContextMenu(folderIcon, name);
-
   desktop.appendChild(folderIcon);
 }
 
